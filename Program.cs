@@ -1,24 +1,30 @@
 using Microsoft.AspNetCore.RateLimiting;
+using RateLimiting;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var myOptions = new MyRateLimitOptions();
+builder.Configuration.GetSection(MyRateLimitOptions.MyRateLimit).Bind(myOptions);
+var slidingPolicy = "sliding";
+
 builder.Services.AddRateLimiter(_ => _
-    .AddFixedWindowLimiter(policyName: "fixed", options =>
+    .AddSlidingWindowLimiter(policyName: slidingPolicy, options =>
     {
-        options.PermitLimit = 4;
-        options.Window = TimeSpan.FromSeconds(12);
+        options.PermitLimit = myOptions.PermitLimit;
+        options.Window = TimeSpan.FromSeconds(myOptions.Window);
+        options.SegmentsPerWindow = myOptions.SegmentsPerWindow;
         options.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
-        options.QueueLimit = 2;
+        options.QueueLimit = myOptions.QueueLimit;
     }));
 
 var app = builder.Build();
 
-app.UseRateLimiter(); // must be called after UseRouting when rate limiting endpoint specific APIs are used.
+app.UseRateLimiter();
 
 static string GetTicks() => (DateTime.Now.Ticks & 0x11111).ToString("00000");
 
-app.MapGet("/", () => Results.Ok($"Hello {GetTicks()}"))
-                           .RequireRateLimiting("fixed");
+app.MapGet("/", () => Results.Ok($"Sliding Window Limiter {GetTicks()}"))
+                           .RequireRateLimiting(slidingPolicy);
 
 app.Run();
